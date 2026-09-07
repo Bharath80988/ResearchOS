@@ -8,127 +8,21 @@ from pydantic import ValidationError
 from ...database.base import SessionLocal
 from ...database.models import ResearchRun, ResearchTask, ResearchEvent
 from ...api.schemas.research import ResearchCreateRequest, ResearchRunResponse, ResearchEventSchema
+from ...agents.orchestrator import ResearchOrchestrator
 from ...utils import logger
 
 research_bp = Blueprint("research", __name__)
 
 
-def _simulate_phase1_research_progress(research_id: str, question: str, depth: str):
-    """
-    Phase 1 asynchronous research stage simulator.
-    In Phase 1, initializes tasks and steps through the pipeline stages with realistic research events,
-    ensuring real-time visual progress on both REST and SSE stream endpoints.
-    Subsequent phases integrate live LLM planners and search tools.
-    """
-    db = SessionLocal()
-    try:
-        run = db.query(ResearchRun).filter(ResearchRun.id == research_id).first()
-        if not run:
-            return
-
-        # Stage 1: Intent Classification & Planning
-        time.sleep(0.6)
-        run.status = "planning"
-        run.current_stage = "Classifying intent & decomposing subtasks"
-        run.progress_percentage = 15
-        
-        # Subtasks generation based on depth & prompt
-        tasks_data = [
-            {"title": "Clarify definitions & core taxonomy", "purpose": "Establish foundational concepts", "priority": 1, "sources": ["web", "academic"]},
-            {"title": "Survey empirical benchmarks & state-of-the-art", "purpose": "Gather performance metrics", "priority": 2, "sources": ["academic"]},
-            {"title": "Identify technical limitations & trade-offs", "purpose": "Evaluate failure modes and bottlenecks", "priority": 3, "sources": ["web", "academic", "github"]},
-            {"title": "Map candidate research gaps & underexplored directions", "purpose": "Synthesize future directions", "priority": 4, "sources": ["academic", "reddit"]},
-        ]
-        
-        created_tasks = []
-        for t_info in tasks_data:
-            task = ResearchTask(
-                research_run_id=research_id,
-                title=t_info["title"],
-                purpose=t_info["purpose"],
-                priority=t_info["priority"],
-                status="in_progress" if t_info["priority"] == 1 else "pending",
-                source_types=t_info["sources"],
-                coverage_score=0.0
-            )
-            db.add(task)
-            created_tasks.append(task)
-            
-        evt1 = ResearchEvent(
-            research_run_id=research_id,
-            event_type="plan_created",
-            stage="planning",
-            message="Generated research plan with 4 prioritized subtasks and source constraints.",
-            payload={"subtasks_count": 4, "depth": depth}
-        )
-        db.add(evt1)
-        db.commit()
-
-        # Stage 2: Searching Sources
-        time.sleep(0.8)
-        run.status = "searching"
-        run.current_stage = "Parallel querying academic, web, and technical indexes"
-        run.progress_percentage = 35
-        evt2 = ResearchEvent(
-            research_run_id=research_id,
-            event_type="search_started",
-            stage="searching",
-            message=f"Dispatched search queries across OpenAlex, arXiv, and web adapters for: '{question[:60]}...'",
-            payload={"sources_targeted": ["academic", "web", "github"]}
-        )
-        db.add(evt2)
-        db.commit()
-
-        # Stage 3: Ingestion & Hybrid Retrieval
-        time.sleep(1.0)
-        run.status = "analyzing"
-        run.current_stage = "Extracting evidence passages & building evidence ledger"
-        run.progress_percentage = 65
-        evt3 = ResearchEvent(
-            research_run_id=research_id,
-            event_type="evidence_found",
-            stage="analyzing",
-            message="Extracted high-confidence evidence passages across candidate documents.",
-            payload={"extracted_claims": 8, "evidence_passages": 14}
-        )
-        db.add(evt3)
-        db.commit()
-
-        # Stage 4: Synthesis & Completion
-        time.sleep(0.8)
-        run.status = "completed"
-        run.current_stage = "Research completed"
-        run.progress_percentage = 100
-        run.summary = f"Comprehensive research completed for '{question}'. Found multiple supporting sources with traceable evidence."
-        
-        # Mark tasks completed
-        for t in created_tasks:
-            t.status = "completed"
-            t.coverage_score = 0.95
-
-        evt4 = ResearchEvent(
-            research_run_id=research_id,
-            event_type="research_completed",
-            stage="completed",
-            message="Deep research completed successfully. Findings compiled into evidence ledger.",
-            payload={"status": "success", "duration_sec": 3.2}
-        )
-        db.add(evt4)
-        db.commit()
-
-    except Exception as e:
-        logger.error(f"Error executing research run {research_id}: {e}", exc_info=True)
-        if run:
-            run.status = "failed"
-            run.error_message = str(e)
-            db.commit()
-    finally:
-        db.close()
+def _execute_orchestrated_research(research_id: str, question: str, intent: str, depth: str):
+    """Executes the autonomous ResearchOS multi-AI orchestrator pipeline in background."""
+    orchestrator = ResearchOrchestrator(research_id=research_id)
+    orchestrator.run_pipeline(question=question, intent=intent, depth=depth)
 
 
 @research_bp.route("/research", methods=["POST"])
 def create_research_run():
-    """Initiates a new research run."""
+    """Initiates a new research run with autonomous multi-AI orchestration."""
     raw_data = request.get_json() or {}
     try:
         validated = ResearchCreateRequest(**raw_data)
@@ -139,25 +33,24 @@ def create_research_run():
     try:
         run = ResearchRun(
             question=validated.question,
-            intent=validated.intent,
-            depth=validated.depth,
+            intent=validated.intent or "academic_research",
+            depth=validated.depth or "standard",
             project_id=validated.project_id,
             user_id=validated.user_id,
             options=validated.options or {},
             status="queued",
-            current_stage="Research initiated",
+            current_stage="Research initialized in worker queue",
             progress_percentage=0,
             stats={"sources_count": 0, "claims_count": 0, "tokens": 0}
         )
         db.add(run)
         db.flush()
 
-        # Emit initial event
         init_event = ResearchEvent(
             research_run_id=run.id,
             event_type="research_started",
             stage="queued",
-            message=f"Research queued: '{validated.question}'",
+            message=f"Research inquiry queued: '{validated.question}'",
             payload={"depth": validated.depth, "intent": validated.intent}
         )
         db.add(init_event)
@@ -166,10 +59,10 @@ def create_research_run():
         research_id = run.id
         created_at = run.created_at
 
-        # Launch asynchronous research workflow
+        # Launch multi-AI orchestrator pipeline in background thread / Celery worker
         threading.Thread(
-            target=_simulate_phase1_research_progress,
-            args=(research_id, validated.question, validated.depth),
+            target=_execute_orchestrated_research,
+            args=(research_id, validated.question, validated.intent, validated.depth),
             daemon=True
         ).start()
 
@@ -226,7 +119,7 @@ def list_research_runs():
 
 @research_bp.route("/research/<research_id>", methods=["GET"])
 def get_research_run(research_id: str):
-    """Retrieves full details and subtasks for a specific research run."""
+    """Retrieves full details, subtasks, and findings for a research run."""
     db = SessionLocal()
     try:
         run = db.query(ResearchRun).filter(ResearchRun.id == research_id).first()
@@ -269,7 +162,7 @@ def get_research_run(research_id: str):
 
 @research_bp.route("/research/<research_id>/events", methods=["GET"])
 def get_research_events(research_id: str):
-    """Retrieves all chronological events for a research run."""
+    """Retrieves chronological events for a research run."""
     db = SessionLocal()
     try:
         events = (
@@ -312,7 +205,6 @@ def stream_research_events(research_id: str):
 
                 query = db.query(ResearchEvent).filter(ResearchEvent.research_run_id == research_id)
                 if last_seen_event_id:
-                    # Fetch events created after the last one seen
                     last_event = db.query(ResearchEvent).filter(ResearchEvent.id == last_seen_event_id).first()
                     if last_event:
                         query = query.filter(ResearchEvent.created_at > last_event.created_at)
@@ -352,7 +244,7 @@ def stream_research_events(research_id: str):
             finally:
                 db.close()
 
-            time.sleep(0.5)
+            time.sleep(0.4)
 
     return Response(
         event_generator(),

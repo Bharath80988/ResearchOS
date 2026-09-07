@@ -1,72 +1,50 @@
-# ResearchOS — Architectural Specification
+# ResearchOS — Architectural Specification (v2.0)
 
-ResearchOS is engineered with a modular, decoupled architecture adhering to clean separation of concerns and provider-agnostic extensibility.
+ResearchOS is engineered with a modular, decoupled multi-agent architecture supporting 100% free models and sharded parallel worker extraction.
 
 ---
 
-## 1. High-Level System Layers
+## 1. Multi-AI Orchestrator & Sharded Worker Pipeline
 
 ```
 +-------------------------------------------------------------------------+
 |                  Workstation Presentation Layer (React + Vite)          |
-|  - Multi-pane Research Workspace      - Real-time Event Stream / SSE   |
-|  - Interactive Research Plan Explorer - Traceable Evidence Ledger Visual|
+|  - Model Provider Selectors (DeepSeek R1, Groq, HuggingFace, Gemini)    |
+|  - Real-time Event Stream / SSE Terminal & Multi-Agent Telemetry        |
 +-------------------------------------------------------------------------+
                                     | REST / SSE
 +-------------------------------------------------------------------------+
 |                      API & Orchestration Layer (Flask)                  |
-|  - Research Run Management           - Telemetry & Logging Middleware   |
-|  - Rate Limiting & Validation        - Event Broadcasting Hub           |
+|  - Master ResearchOrchestrator        - Telemetry & Logging Middleware  |
 +-------------------------------------------------------------------------+
                                     |
 +-------------------------------------------------------------------------+
-|                       Research Intelligence Subsystems                  |
-|  - Intent Classifier                 - Research Planner & Decomposer    |
-|  - Search Tool Aggregator            - Crawler & Document Processor     |
-|  - Hybrid Retrieval (pgvector+BM25)  - Cross-Encoder Reranker           |
-|  - Evidence Extraction & Ledger      - Contradiction Detector           |
-|  - Coverage Evaluator & Stopping     - Gap Discovery & Novelty Analyzer |
-|  - Report Generator & Citations      - User & Project Memory Subsystem  |
+|                    Free LLM Router Layer (100% Free Tiers)              |
+|  - OpenRouter (deepseek-r1:free, deepseek-chat:free, llama-3.3-70b:free)|
+|  - Groq (llama-3.1-8b-instant @ 300+ t/s for parallel workers)          |
+|  - Hugging Face Serverless (Qwen2.5-72B-Instruct)                       |
+|  - Google Gemini Free Tier (gemini-2.5-flash / pro)                     |
 +-------------------------------------------------------------------------+
                                     |
 +-------------------------------------------------------------------------+
-|                 Provider Abstraction Layer (LLM & Tools)                |
-|  - LLMInterface (Gemini, Groq, OpenRouter)                              |
-|  - SearchAdapters (Academic, Web, Reddit, GitHub)                       |
+|                Parallel Workload Sharding & Evidence Extraction         |
+|  - SearchAggregator (OpenAlex, arXiv, Wikipedia API)                    |
+|  - Workload Sharder (30 sources -> 3 batches of 10 sources each)        |
+|  - ParallelWorkerPool (N concurrent AI workers extracting raw text)     |
+|  - Token Compression Engine (Raw HTML -> High-Signal Claims ~85% Saved) |
 +-------------------------------------------------------------------------+
                                     |
 +-------------------------------------------------------------------------+
-|                        Data & State Persistence Layer                   |
-|  - PostgreSQL with pgvector (Structured metadata, Vector embeddings)    |
-|  - Redis & Celery (Asynchronous task queue, Broker, Rate-limit cache)   |
+|                       Synthesizer & Citation Engine                     |
+|  - Cross-Source Evidence Merging      - Contradiction Detection         |
+|  - Research Gap Discovery             - Exact Traceable Citations       |
 +-------------------------------------------------------------------------+
 ```
 
 ---
 
-## 2. Core Subsystems
+## 2. Token Minimization & Worker Sharding
 
-### 2.1 Provider-Agnostic LLM Interface & Router
-- **Standardized Base Interface**: Defines `generate()`, `generate_structured()`, `stream()`, and `embed()`.
-- **Intelligent Routing**: Dynamic task-based model selection:
-  - Fast models (e.g. Gemini Flash / Groq Llama) for query expansion and classification.
-  - Reasoning models (e.g. Gemini Pro / Claude 3.5 Sonnet) for planning, contradiction analysis, and synthesis.
-- **Resilience**: Exponential backoff retry, rate-limit quota tracking, and automatic provider fallback.
-
-### 2.2 Pluggable Search Adapters
-- Uniform output normalization across heterogeneous providers:
-  - **AcademicSearch**: OpenAlex, Crossref, arXiv, Semantic Scholar, PubMed.
-  - **WebSearch**: Serper, Tavily, SearXNG.
-  - **CommunitySearch**: Reddit API.
-  - **CodeSearch**: GitHub REST/GraphQL API.
-
-### 2.3 Document Processing & Hybrid Retrieval
-- **Structure-Aware Chunking**: Preserves section titles, page numbers, and semantic boundaries.
-- **Dual Retrieval Pipeline**:
-  - Dense vector similarity via `pgvector` (`text-embedding-004` / `bge-large-en`).
-  - Sparse lexical matching via BM25 / PostgreSQL full-text search.
-  - Cross-encoder reranking over top candidates.
-
-### 2.4 Evidence Ledger & Citation Integrity
-- Fine-grained traceability linking every claim in generated reports directly to an exact document chunk, page, section, confidence score, and corroborating sources.
-- Guaranteed zero citation hallucination: all references must map to database source records verified during the research run.
+- **Worker Sharding**: When 30 URLs or research papers are retrieved, the `ParallelWorkerPool` shards them into batches of 10.
+- **Concurrent Execution**: Fast free models (like Groq `llama-3.1-8b-instant` or OpenRouter) run in parallel over each batch.
+- **Evidence Compression**: Instead of passing 50,000+ raw webpage tokens to the reasoning model, each worker produces structured JSON claims and supporting quotes (~2,000 tokens total), saving over 85% in token context.

@@ -1,11 +1,11 @@
 import React from 'react';
-import { Check, Loader2, Circle } from 'lucide-react';
+import { Check, Loader2, Circle, Users, Sparkles } from 'lucide-react';
 
 const STAGES = [
-  { id: 'planning', label: '1. Intent & Planning', desc: 'Decompose query & generate subtasks' },
-  { id: 'searching', label: '2. Multi-Source Search', desc: 'Querying academic, web & technical indexes' },
-  { id: 'analyzing', label: '3. Evidence Extraction', desc: 'Parsing passages & verifying claims' },
-  { id: 'completed', label: '4. Synthesis & Reports', desc: 'Structuring report with verified citations' },
+  { id: 'planning', label: '1. Intent & Planning', desc: 'Reasoning model structures subtasks' },
+  { id: 'searching', label: '2. Multi-Source Search', desc: 'Querying OpenAlex, arXiv & Web' },
+  { id: 'analyzing', label: '3. Sharded AI Workers', desc: 'Parallel AI workers (10 sites/worker)' },
+  { id: 'synthesizing', label: '4. Synthesis & Citations', desc: 'Merging evidence & research gaps' },
 ];
 
 export default function ProgressStage({ currentStatus, currentStage, progressPercentage }) {
@@ -15,8 +15,8 @@ export default function ProgressStage({ currentStatus, currentStage, progressPer
       planning: 1,
       searching: 2,
       analyzing: 3,
-      synthesizing: 3,
-      completed: 4,
+      synthesizing: 4,
+      completed: 5,
       failed: -1,
     };
 
@@ -33,8 +33,21 @@ export default function ProgressStage({ currentStatus, currentStage, progressPer
     <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <h3 style={{ fontSize: '15px', fontWeight: '700' }}>Research Lifecycle Progression</h3>
-          <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{currentStage || 'Ready for research'}</p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <h3 style={{ fontSize: '15px', fontWeight: '700' }}>Multi-AI Orchestration Pipeline</h3>
+            <span style={{
+              fontSize: '10px',
+              padding: '2px 8px',
+              borderRadius: 'var(--radius-full)',
+              background: 'rgba(99, 102, 241, 0.15)',
+              color: 'var(--accent-primary)',
+              fontWeight: '700',
+              textTransform: 'uppercase'
+            }}>
+              1 Orchestrator + N Workers
+            </span>
+          </div>
+          <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>{currentStage || 'Ready for research'}</p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span style={{ fontSize: '13px', fontWeight: '700', color: 'var(--accent-primary)' }}>
