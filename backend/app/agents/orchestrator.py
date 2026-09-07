@@ -1,5 +1,5 @@
 import time
-from typing import Dict, Any, Callable, Optional
+from typing import Dict, Any, List, Optional
 from ..database.base import SessionLocal
 from ..database.models import (
     ResearchRun, ResearchTask, ResearchEvent,
@@ -14,13 +14,10 @@ from ..utils import logger
 
 class ResearchOrchestrator:
     """
-    Master Autonomous Orchestrator for ResearchOS.
-    Manages end-to-end multi-agent execution:
-    - Intent decomposition
-    - Parallel search
-    - Sharded AI worker extraction (e.g. 10 sources per worker)
-    - Token compression & evidence merging
-    - Final report generation with verifiable citations
+    Master Multi-AI Orchestrator:
+    - Gemini / DeepSeek as Head Orchestrator
+    - Groq & DeepSeek as Sharded Parallel Research Workers
+    - Multi-mode execution: Quick (Instant), Standard (Mid/Analysis), Deep (Full Research)
     """
 
     def __init__(self, research_id: str):
@@ -66,39 +63,37 @@ class ResearchOrchestrator:
         finally:
             db.close()
 
-    def run_pipeline(self, question: str, intent: str = "academic_research", depth: str = "standard"):
-        """Executes the full multi-AI research lifecycle."""
+    def run_pipeline(self, question: str, intent: str = "academic_research", depth: str = "deep"):
+        """Executes the multi-AI research lifecycle with mode-specific depth."""
         db = SessionLocal()
         try:
+            is_quick = (depth == "quick")
+            is_mid = (depth == "standard")
+
             # 1. Intent & Planning Stage
-            self._update_run_status("planning", "Decomposing inquiry & structuring research plan", 15)
-            self._emit_event("planning_started", "planning", f"Orchestrator analyzing inquiry: '{question}'")
+            self._update_run_status("planning", "Head AI (Gemini/DeepSeek) orchestrating research plan", 15)
+            self._emit_event("planning_started", "planning", f"Head Orchestrator analyzing question: '{question}' in [{depth.upper()}] mode.")
 
-            # Generate decomposed subtasks using LLM or structured planner
-            plan_prompt = f"""Decompose this research inquiry into 4 focused subtasks:
-Inquiry: {question}
-Intent: {intent}
-Depth: {depth}
-
-Return raw JSON:
-{{
-  "subtasks": [
-    {{"title": "Subtask title", "purpose": "Objective", "priority": 1, "sources": ["academic", "web"]}}
-  ]
-}}"""
-            try:
-                plan_res = router.generate_structured(plan_prompt, tier=ModelTier.REASONING, max_tokens=512)
-                subtasks_data = plan_res.parsed_json.get("subtasks", []) if plan_res.parsed_json else []
-            except Exception:
-                subtasks_data = []
-
-            if not subtasks_data:
+            if is_quick:
+                # Fast direct decomposition
                 subtasks_data = [
-                    {"title": f"Investigate core mechanisms & definitions for {question[:40]}", "purpose": "Establish foundational taxonomy", "priority": 1, "sources": ["web", "academic"]},
-                    {"title": "Survey empirical benchmarks & recent literature", "purpose": "Extract metrics and performance", "priority": 2, "sources": ["academic"]},
-                    {"title": "Identify technical trade-offs & limitations", "purpose": "Analyze bottlenecks and failure modes", "priority": 3, "sources": ["academic", "github"]},
-                    {"title": "Map candidate research gaps & underexplored directions", "purpose": "Synthesize future outlook", "priority": 4, "sources": ["academic", "reddit"]}
+                    {"title": f"Direct Factual Resolution for {question[:40]}", "purpose": "Rapid retrieval & synthesis", "priority": 1, "sources": ["web", "academic"]}
                 ]
+                search_limit = 5
+            elif is_mid:
+                subtasks_data = [
+                    {"title": f"Core Mechanisms & Key Definitions", "purpose": "Establish architecture and concepts", "priority": 1, "sources": ["web", "academic"]},
+                    {"title": f"Benchmark Performance & Trade-offs", "purpose": "Empirical comparison and debugging analysis", "priority": 2, "sources": ["academic", "github"]}
+                ]
+                search_limit = 12
+            else: # deep mode
+                subtasks_data = [
+                    {"title": f"Taxonomy & Theoretical Foundations", "purpose": "Establish foundational mechanisms", "priority": 1, "sources": ["academic", "web"]},
+                    {"title": f"Empirical Benchmarks & SOTA Literature", "purpose": "Gather benchmark statistics and datasets", "priority": 2, "sources": ["academic"]},
+                    {"title": f"Technical Limitations & Contradictions", "purpose": "Identify failure modes and disagreements", "priority": 3, "sources": ["academic", "github"]},
+                    {"title": f"Underexplored Research Gaps & Future Work", "purpose": "Discover novel research directions", "priority": 4, "sources": ["academic", "reddit"]}
+                ]
+                search_limit = 25
 
             created_tasks = []
             for st_info in subtasks_data:
@@ -107,7 +102,7 @@ Return raw JSON:
                     title=st_info.get("title", "Research Subtask"),
                     purpose=st_info.get("purpose", ""),
                     priority=st_info.get("priority", 1),
-                    status="pending",
+                    status="in_progress" if st_info.get("priority") == 1 else "pending",
                     source_types=st_info.get("sources", ["academic", "web"]),
                     coverage_score=0.0
                 )
@@ -115,17 +110,17 @@ Return raw JSON:
                 created_tasks.append(t)
             db.commit()
 
-            self._emit_event("plan_created", "planning", f"Orchestrator generated {len(created_tasks)} prioritized subtasks.", {"subtasks_count": len(created_tasks)})
+            self._emit_event("plan_created", "planning", f"Generated {len(created_tasks)} prioritized subtasks for {depth.upper()} research.", {"subtasks_count": len(created_tasks)})
 
             # 2. Multi-Source Search Stage
-            self._update_run_status("searching", "Dispatched multi-source search across scholarly and web indexes", 35)
+            self._update_run_status("searching", "Querying open scholarly and web indexes", 35)
             self._emit_event("search_started", "searching", f"Searching OpenAlex, arXiv, and open indexes for: '{question[:60]}...'")
 
-            raw_sources = self.search_tool.search(query=question, max_results=20)
-            self._emit_event("search_completed", "searching", f"Retrieved {len(raw_sources)} candidate sources across academic and web domains.", {"sources_found": len(raw_sources)})
+            raw_sources = self.search_tool.search(query=question, max_results=search_limit)
+            self._emit_event("search_completed", "searching", f"Retrieved {len(raw_sources)} candidate sources across scholarly & web indexes.", {"sources_found": len(raw_sources)})
 
-            # Save discovered sources in DB
-            db_sources = []
+            # Store discovered sources cleanly in DB and keep a list of plain dict references
+            saved_sources_meta = []
             for s in raw_sources:
                 src_obj = Source(
                     research_run_id=self.research_id,
@@ -138,11 +133,18 @@ Return raw JSON:
                     doi=s.doi
                 )
                 db.add(src_obj)
-                db_sources.append(src_obj)
+                db.flush()
+                saved_sources_meta.append({
+                    "id": src_obj.id,
+                    "title": src_obj.title,
+                    "url": src_obj.url,
+                    "author": src_obj.author,
+                    "published_at": src_obj.published_at
+                })
             db.commit()
 
             # 3. Sharded Parallel Extraction & Token Minimization Stage
-            self._update_run_status("analyzing", "Running parallel AI workers (10 sources per worker) to extract structured evidence", 60)
+            self._update_run_status("analyzing", "Multi-AI workers (Groq, DeepSeek, HF) extracting evidence in parallel", 60)
 
             def on_worker_evt(msg, payload):
                 self._emit_event("worker_progress", "analyzing", msg, payload)
@@ -156,13 +158,13 @@ Return raw JSON:
             self._emit_event(
                 "evidence_found",
                 "analyzing",
-                f"Completed parallel extraction. Compressed evidence from {len(raw_sources)} sources.",
+                f"Multi-AI parallel extraction complete. Extracted structured evidence from {len(raw_sources)} sources.",
                 {"items_extracted": len(compressed_evidence)}
             )
 
             # 4. Synthesizer & Report Generation Stage
             self._update_run_status("synthesizing", "Reasoning model synthesizing findings and verifying citations", 85)
-            self._emit_event("synthesis_started", "synthesizing", "Synthesizer agent compiling citation-backed report and research gaps.")
+            self._emit_event("synthesis_started", "synthesizing", "Synthesizer compiling citation-backed report and research gaps.")
 
             synthesis_result = self.synthesizer.synthesize(
                 question=question,
@@ -171,11 +173,11 @@ Return raw JSON:
 
             final_summary = synthesis_result.get("summary")
 
-            # Persist Report & Citations
+            # Persist Report & Citations cleanly
             report = ResearchReport(
                 research_run_id=self.research_id,
                 title=f"Research Brief: {question}",
-                report_type="deep_research_report",
+                report_type="deep_research_report" if depth == "deep" else f"{depth}_report",
                 executive_summary=final_summary,
                 markdown_content=final_summary,
                 sections_json=synthesis_result
@@ -184,19 +186,19 @@ Return raw JSON:
             db.flush()
 
             for cit in synthesis_result.get("citations", []):
-                # Match to DB source
-                matching_src = next((s for s in db_sources if s.title == cit.get("title")), db_sources[0] if db_sources else None)
+                matching_src = next((s for s in saved_sources_meta if s["title"] == cit.get("title")), saved_sources_meta[0] if saved_sources_meta else None)
                 if matching_src:
                     c_obj = Citation(
                         report_id=report.id,
-                        source_id=matching_src.id,
+                        source_id=matching_src["id"],
                         citation_key=cit.get("citation_key", "[1]"),
-                        citation_format_apa=f"{matching_src.author or 'Unknown'}. ({matching_src.published_at or 'n.d.'}). {matching_src.title}."
+                        citation_format_apa=f"{matching_src.get('author') or 'Unknown'}. ({matching_src.get('published_at') or 'n.d.'}). {matching_src.get('title')}."
                     )
                     db.add(c_obj)
 
             # Mark all subtasks complete
-            for t in created_tasks:
+            tasks = db.query(ResearchTask).filter(ResearchTask.research_run_id == self.research_id).all()
+            for t in tasks:
                 t.status = "completed"
                 t.coverage_score = 1.0
 

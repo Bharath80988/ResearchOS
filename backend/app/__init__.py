@@ -5,6 +5,7 @@ from .config import get_settings
 from .database.base import init_db
 from .api.routes.health import health_bp
 from .api.routes.research import research_bp
+from .api.routes.reports import reports_bp
 from .utils import logger
 
 
@@ -13,7 +14,6 @@ def create_app(config_override: dict = None) -> Flask:
     app = Flask(__name__)
     settings = get_settings()
 
-    # Configuration
     app.config["SECRET_KEY"] = settings.SECRET_KEY
     app.config["ENV"] = settings.FLASK_ENV
     app.config["DEBUG"] = settings.FLASK_DEBUG
@@ -33,6 +33,7 @@ def create_app(config_override: dict = None) -> Flask:
     # Register Blueprints
     app.register_blueprint(health_bp, url_prefix="/api")
     app.register_blueprint(research_bp, url_prefix="/api")
+    app.register_blueprint(reports_bp, url_prefix="/api")
 
     # Global Error Handlers
     @app.errorhandler(404)
