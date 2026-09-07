@@ -14,15 +14,20 @@ from ...utils import logger
 research_bp = Blueprint("research", __name__)
 
 
-def _execute_orchestrated_research(research_id: str, question: str, intent: str, depth: str):
+def _execute_orchestrated_research(research_id: str, question: str, intent: str, depth: str, uploaded_files: list = None):
     """Executes the autonomous ResearchOS multi-AI orchestrator pipeline in background."""
     orchestrator = ResearchOrchestrator(research_id=research_id)
-    orchestrator.run_pipeline(question=question, intent=intent, depth=depth)
+    orchestrator.run_pipeline(
+        question=question,
+        intent=intent,
+        depth=depth,
+        uploaded_files=uploaded_files
+    )
 
 
 @research_bp.route("/research", methods=["POST"])
 def create_research_run():
-    """Initiates a new research run with autonomous multi-AI orchestration."""
+    """Initiates a new research run with autonomous multi-AI orchestration & file support."""
     raw_data = request.get_json() or {}
     try:
         validated = ResearchCreateRequest(**raw_data)
@@ -31,17 +36,22 @@ def create_research_run():
 
     db = SessionLocal()
     try:
+        files_data = [f.model_dump() for f in validated.files] if validated.files else []
+        options = validated.options or {}
+        if files_data:
+            options["uploaded_files_count"] = len(files_data)
+
         run = ResearchRun(
             question=validated.question,
             intent=validated.intent or "academic_research",
-            depth=validated.depth or "standard",
+            depth=validated.depth or "deep",
             project_id=validated.project_id,
             user_id=validated.user_id,
-            options=validated.options or {},
+            options=options,
             status="queued",
-            current_stage="Research initialized in worker queue",
+            current_stage=f"Research initialized ({len(files_data)} documents attached)" if files_data else "Research initialized in worker queue",
             progress_percentage=0,
-            stats={"sources_count": 0, "claims_count": 0, "tokens": 0}
+            stats={"sources_count": len(files_data), "claims_count": 0, "tokens": 0}
         )
         db.add(run)
         db.flush()
@@ -50,8 +60,8 @@ def create_research_run():
             research_run_id=run.id,
             event_type="research_started",
             stage="queued",
-            message=f"Research inquiry queued: '{validated.question}'",
-            payload={"depth": validated.depth, "intent": validated.intent}
+            message=f"Research inquiry queued: '{validated.question}' ({len(files_data)} attached docs)",
+            payload={"depth": validated.depth, "intent": validated.intent, "files_count": len(files_data)}
         )
         db.add(init_event)
         db.commit()
@@ -59,10 +69,10 @@ def create_research_run():
         research_id = run.id
         created_at = run.created_at
 
-        # Launch multi-AI orchestrator pipeline in background thread / Celery worker
+        # Launch multi-AI orchestrator pipeline in background thread
         threading.Thread(
             target=_execute_orchestrated_research,
-            args=(research_id, validated.question, validated.intent, validated.depth),
+            args=(research_id, validated.question, validated.intent, validated.depth, files_data),
             daemon=True
         ).start()
 
@@ -139,6 +149,17 @@ def get_research_run(research_id: str):
                 "coverage_score": t.coverage_score
             })
 
+        # Fetch report details if present
+        report_data = {}
+        if run.reports and len(run.reports) > 0:
+            rep = run.reports[0]
+            report_data = {
+                "id": rep.id,
+                "title": rep.title,
+                "markdown_content": rep.markdown_content,
+                "sections": rep.sections_json or {}
+            }
+
         return jsonify({
             "id": run.id,
             "question": run.question,
@@ -152,10 +173,26 @@ def get_research_run(research_id: str):
             "plan": run.plan,
             "stats": run.stats,
             "options": run.options,
+            "report": report_data,
             "created_at": run.created_at.isoformat() if run.created_at else None,
             "updated_at": run.updated_at.isoformat() if run.updated_at else None,
             "tasks": tasks_list
         }), 200
+    finally:
+        db.close()
+
+
+@research_bp.route("/research/<research_id>", methods=["DELETE"])
+def delete_research_run(research_id: str):
+    """Deletes a past research run."""
+    db = SessionLocal()
+    try:
+        run = db.query(ResearchRun).filter(ResearchRun.id == research_id).first()
+        if not run:
+            return jsonify({"error": "Research run not found"}), 404
+        db.delete(run)
+        db.commit()
+        return jsonify({"message": "Research run deleted successfully", "id": research_id}), 200
     finally:
         db.close()
 

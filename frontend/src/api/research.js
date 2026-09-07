@@ -19,7 +19,7 @@ export async function createResearchRun(payload) {
   return res.json();
 }
 
-export async function fetchResearchRuns(limit = 20, offset = 0) {
+export async function fetchResearchRuns(limit = 30, offset = 0) {
   const res = await fetch(`${API_BASE}/research?limit=${limit}&offset=${offset}`);
   if (!res.ok) throw new Error(`Failed to fetch research runs: ${res.statusText}`);
   return res.json();
@@ -28,6 +28,14 @@ export async function fetchResearchRuns(limit = 20, offset = 0) {
 export async function fetchResearchRun(researchId) {
   const res = await fetch(`${API_BASE}/research/${researchId}`);
   if (!res.ok) throw new Error(`Failed to fetch research run: ${res.statusText}`);
+  return res.json();
+}
+
+export async function deleteResearchRun(researchId) {
+  const res = await fetch(`${API_BASE}/research/${researchId}`, {
+    method: 'DELETE',
+  });
+  if (!res.ok) throw new Error(`Failed to delete research run: ${res.statusText}`);
   return res.json();
 }
 
@@ -44,7 +52,11 @@ export function subscribeToResearchEvents(researchId, onEvent, onError) {
     'research_started',
     'plan_created',
     'search_started',
+    'file_ingestion',
+    'search_completed',
+    'worker_progress',
     'evidence_found',
+    'synthesis_started',
     'research_completed',
     'done',
     'error'

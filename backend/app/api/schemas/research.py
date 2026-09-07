@@ -3,12 +3,20 @@ from datetime import datetime
 from pydantic import BaseModel, Field, ConfigDict
 
 
+class FileUploadItem(BaseModel):
+    name: str
+    content: str
+    size: Optional[int] = 0
+    type: Optional[str] = "text/plain"
+
+
 class ResearchCreateRequest(BaseModel):
-    question: str = Field(..., min_length=3, description="The user's research inquiry or prompt.")
-    intent: Optional[str] = Field(default="general_research", description="Classified or requested intent category.")
-    depth: Optional[str] = Field(default="standard", description="Research depth level: quick, standard, or deep.")
+    question: str = Field(..., min_length=2, description="The user's research inquiry or prompt.")
+    intent: Optional[str] = Field(default="academic_research", description="Classified or requested intent category.")
+    depth: Optional[str] = Field(default="deep", description="Research depth level: quick (instant), standard (mid), or deep.")
     project_id: Optional[str] = Field(default=None, description="Optional project workspace identifier.")
     user_id: Optional[str] = Field(default=None, description="Optional user ID.")
+    files: Optional[List[FileUploadItem]] = Field(default_factory=list, description="List of uploaded supporting files/documents (up to 100+).")
     options: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Fine-grained research flags and filters.")
 
 

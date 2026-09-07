@@ -7,6 +7,7 @@ from ..database.models import (
 )
 from ..llm.router import router, ModelTier
 from ..tools.search_aggregator import SearchAggregator
+from ..tools.base import SearchResult
 from .worker_pool import ParallelWorkerPool
 from .synthesizer import SynthesizerAgent
 from ..utils import logger
@@ -16,8 +17,9 @@ class ResearchOrchestrator:
     """
     Master Multi-AI Orchestrator:
     - Gemini / DeepSeek as Head Orchestrator
-    - Groq & DeepSeek as Sharded Parallel Research Workers
+    - Groq, DeepSeek, HF as Sharded Parallel Research Workers (shards 100+ web pages or uploaded docs)
     - Multi-mode execution: Quick (Instant), Standard (Mid/Analysis), Deep (Full Research)
+    - Full chapter research publication with executable code snippets
     """
 
     def __init__(self, research_id: str):
@@ -63,35 +65,41 @@ class ResearchOrchestrator:
         finally:
             db.close()
 
-    def run_pipeline(self, question: str, intent: str = "academic_research", depth: str = "deep"):
-        """Executes the multi-AI research lifecycle with mode-specific depth."""
+    def run_pipeline(
+        self,
+        question: str,
+        intent: str = "academic_research",
+        depth: str = "deep",
+        uploaded_files: List[Dict[str, str]] = None
+    ):
+        """Executes the multi-AI research lifecycle with mode-specific depth and file processing."""
         db = SessionLocal()
         try:
             is_quick = (depth == "quick")
             is_mid = (depth == "standard")
 
             # 1. Intent & Planning Stage
-            self._update_run_status("planning", "Head AI (Gemini/DeepSeek) orchestrating research plan", 15)
+            self._update_run_status("planning", "Head AI (Gemini/DeepSeek) planning research publication", 15)
             self._emit_event("planning_started", "planning", f"Head Orchestrator analyzing question: '{question}' in [{depth.upper()}] mode.")
 
             if is_quick:
-                # Fast direct decomposition
                 subtasks_data = [
                     {"title": f"Direct Factual Resolution for {question[:40]}", "purpose": "Rapid retrieval & synthesis", "priority": 1, "sources": ["web", "academic"]}
                 ]
                 search_limit = 5
             elif is_mid:
                 subtasks_data = [
-                    {"title": f"Core Mechanisms & Key Definitions", "purpose": "Establish architecture and concepts", "priority": 1, "sources": ["web", "academic"]},
-                    {"title": f"Benchmark Performance & Trade-offs", "purpose": "Empirical comparison and debugging analysis", "priority": 2, "sources": ["academic", "github"]}
+                    {"title": f"Core Mechanisms & Key Definitions", "purpose": "Architecture and conceptual definitions", "priority": 1, "sources": ["web", "academic"]},
+                    {"title": f"Benchmark Performance & Implementation Analysis", "purpose": "Empirical comparison, code walkthrough & debugging", "priority": 2, "sources": ["academic", "github"]}
                 ]
                 search_limit = 12
             else: # deep mode
                 subtasks_data = [
-                    {"title": f"Taxonomy & Theoretical Foundations", "purpose": "Establish foundational mechanisms", "priority": 1, "sources": ["academic", "web"]},
+                    {"title": f"Taxonomy & Theoretical Foundations", "purpose": "Establish foundational mechanisms & problem formulation", "priority": 1, "sources": ["academic", "web"]},
                     {"title": f"Empirical Benchmarks & SOTA Literature", "purpose": "Gather benchmark statistics and datasets", "priority": 2, "sources": ["academic"]},
-                    {"title": f"Technical Limitations & Contradictions", "purpose": "Identify failure modes and disagreements", "priority": 3, "sources": ["academic", "github"]},
-                    {"title": f"Underexplored Research Gaps & Future Work", "purpose": "Discover novel research directions", "priority": 4, "sources": ["academic", "reddit"]}
+                    {"title": f"Production Implementation & Working Code Architecture", "purpose": "Develop complete executable software code examples", "priority": 3, "sources": ["academic", "github"]},
+                    {"title": f"Technical Limitations & Contradictions", "purpose": "Identify failure modes and disagreements in literature", "priority": 4, "sources": ["academic", "web"]},
+                    {"title": f"Underexplored Research Gaps & Novel Opportunities", "purpose": "Discover novel research directions and formulate future work", "priority": 5, "sources": ["academic", "reddit"]}
                 ]
                 search_limit = 25
 
@@ -112,16 +120,36 @@ class ResearchOrchestrator:
 
             self._emit_event("plan_created", "planning", f"Generated {len(created_tasks)} prioritized subtasks for {depth.upper()} research.", {"subtasks_count": len(created_tasks)})
 
-            # 2. Multi-Source Search Stage
+            # 2. Multi-Source Search & Document Ingestion
             self._update_run_status("searching", "Querying open scholarly and web indexes", 35)
             self._emit_event("search_started", "searching", f"Searching OpenAlex, arXiv, and open indexes for: '{question[:60]}...'")
 
-            raw_sources = self.search_tool.search(query=question, max_results=search_limit)
-            self._emit_event("search_completed", "searching", f"Retrieved {len(raw_sources)} candidate sources across scholarly & web indexes.", {"sources_found": len(raw_sources)})
+            all_candidate_sources = self.search_tool.search(query=question, max_results=search_limit)
 
-            # Store discovered sources cleanly in DB and keep a list of plain dict references
+            # Ingest user uploaded files if any (can be up to 100+ files)
+            uploaded_summary_snippets = []
+            if uploaded_files:
+                self._emit_event("file_ingestion", "searching", f"Ingesting {len(uploaded_files)} user-provided supporting documents into research corpus.", {"files_count": len(uploaded_files)})
+                for f_idx, f in enumerate(uploaded_files):
+                    fname = f.get("name", f"Document_{f_idx+1}")
+                    fcontent = f.get("content", "")
+                    uploaded_summary_snippets.append(f"Document [{fname}]: {fcontent[:300]}")
+                    
+                    all_candidate_sources.append(SearchResult(
+                        title=f"User Doc: {fname}",
+                        url=f"local://{fname}",
+                        source_type="uploaded_file",
+                        domain="local_document",
+                        snippet=fcontent[:500],
+                        author="User Document",
+                        raw_content=fcontent
+                    ))
+
+            self._emit_event("search_completed", "searching", f"Corpus compiled with {len(all_candidate_sources)} total sources ({len(uploaded_files or [])} uploaded files).", {"sources_found": len(all_candidate_sources)})
+
+            # Store discovered sources in DB and keep clean plain dict references
             saved_sources_meta = []
-            for s in raw_sources:
+            for s in all_candidate_sources:
                 src_obj = Source(
                     research_run_id=self.research_id,
                     title=s.title,
@@ -144,13 +172,13 @@ class ResearchOrchestrator:
             db.commit()
 
             # 3. Sharded Parallel Extraction & Token Minimization Stage
-            self._update_run_status("analyzing", "Multi-AI workers (Groq, DeepSeek, HF) extracting evidence in parallel", 60)
+            self._update_run_status("analyzing", "Multi-AI workers (Groq, DeepSeek, HF) extracting evidence across sharded batches", 60)
 
             def on_worker_evt(msg, payload):
                 self._emit_event("worker_progress", "analyzing", msg, payload)
 
             compressed_evidence = self.worker_pool.shard_and_extract(
-                sources=raw_sources,
+                sources=all_candidate_sources,
                 research_topic=question,
                 on_worker_event=on_worker_evt
             )
@@ -158,28 +186,31 @@ class ResearchOrchestrator:
             self._emit_event(
                 "evidence_found",
                 "analyzing",
-                f"Multi-AI parallel extraction complete. Extracted structured evidence from {len(raw_sources)} sources.",
+                f"Multi-AI parallel extraction complete. Extracted structured evidence from {len(all_candidate_sources)} sources.",
                 {"items_extracted": len(compressed_evidence)}
             )
 
-            # 4. Synthesizer & Report Generation Stage
-            self._update_run_status("synthesizing", "Reasoning model synthesizing findings and verifying citations", 85)
-            self._emit_event("synthesis_started", "synthesizing", "Synthesizer compiling citation-backed report and research gaps.")
+            # 4. Synthesizer & Detailed Chapter Report Generation Stage
+            self._update_run_status("synthesizing", "Synthesizing multi-chapter research publication with executable code", 85)
+            self._emit_event("synthesis_started", "synthesizing", "Synthesizer compiling chapter breakdown, architecture code examples, and candidate gaps.")
 
+            uploaded_ctx = "\n".join(uploaded_summary_snippets[:10]) if uploaded_summary_snippets else None
             synthesis_result = self.synthesizer.synthesize(
                 question=question,
-                evidence_items=compressed_evidence
+                evidence_items=compressed_evidence,
+                uploaded_files_summary=uploaded_ctx
             )
 
             final_summary = synthesis_result.get("summary")
+            full_markdown = synthesis_result.get("markdown_content") or final_summary
 
             # Persist Report & Citations cleanly
             report = ResearchReport(
                 research_run_id=self.research_id,
-                title=f"Research Brief: {question}",
+                title=f"Research Publication: {question}",
                 report_type="deep_research_report" if depth == "deep" else f"{depth}_report",
                 executive_summary=final_summary,
-                markdown_content=final_summary,
+                markdown_content=full_markdown,
                 sections_json=synthesis_result
             )
             db.add(report)
@@ -206,15 +237,16 @@ class ResearchOrchestrator:
 
             # 5. Pipeline Completion
             savings_pct = synthesis_result.get("savings_percentage", "85%")
-            self._update_run_status("completed", "Research completed with verified citations", 100, summary=final_summary)
+            self._update_run_status("completed", "Research publication generated with verified citations & code", 100, summary=final_summary)
             self._emit_event(
                 "research_completed",
                 "completed",
-                f"Deep Research complete! Processed {len(raw_sources)} sources with {savings_pct} token compression.",
+                f"Deep Research complete! Processed {len(all_candidate_sources)} sources with {savings_pct} token compression. Publication ready.",
                 {
-                    "sources_analyzed": len(raw_sources),
+                    "sources_analyzed": len(all_candidate_sources),
                     "token_savings": savings_pct,
-                    "citations_count": len(synthesis_result.get("citations", []))
+                    "citations_count": len(synthesis_result.get("citations", [])),
+                    "chapters_count": len(synthesis_result.get("chapters", []))
                 }
             )
 

@@ -11,6 +11,7 @@ import {
   createResearchRun,
   fetchResearchRuns,
   fetchResearchRun,
+  deleteResearchRun,
   fetchResearchEvents,
   subscribeToResearchEvents
 } from './api/research';
@@ -18,6 +19,7 @@ import {
 export default function App() {
   const [activeTab, setActiveTab] = useState('workspace');
   const [rightTab, setRightTab] = useState('events');
+  const [theme, setTheme] = useState('default');
   const [systemHealth, setSystemHealth] = useState(null);
   const [researchHistory, setResearchHistory] = useState([]);
   const [currentRun, setCurrentRun] = useState(null);
@@ -25,20 +27,22 @@ export default function App() {
   const [tasks, setTasks] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
 
+  // Apply theme to body
+  useEffect(() => {
+    document.body.setAttribute('data-theme', theme);
+  }, [theme]);
+
   // Initial load
   useEffect(() => {
-    // Check health
     checkHealth()
       .then(setSystemHealth)
       .catch((err) => console.error('Health check failed:', err));
-
-    // Load research history
     loadHistory();
   }, []);
 
   const loadHistory = async () => {
     try {
-      const data = await fetchResearchRuns(30);
+      const data = await fetchResearchRuns(40);
       setResearchHistory(data.items || []);
     } catch (err) {
       console.error('Failed to load history:', err);
@@ -46,6 +50,12 @@ export default function App() {
   };
 
   const handleSelectRun = async (runId) => {
+    if (!runId) {
+      setCurrentRun(null);
+      setEvents([]);
+      setTasks([]);
+      return;
+    }
     try {
       const runData = await fetchResearchRun(runId);
       setCurrentRun(runData);
@@ -60,6 +70,20 @@ export default function App() {
     }
   };
 
+  const handleDeleteRun = async (runId) => {
+    try {
+      await deleteResearchRun(runId);
+      if (currentRun?.id === runId) {
+        setCurrentRun(null);
+        setTasks([]);
+        setEvents([]);
+      }
+      loadHistory();
+    } catch (err) {
+      console.error('Failed to delete run:', err);
+    }
+  };
+
   const handleSubmitResearch = async (formData) => {
     setIsLoading(true);
     setEvents([]);
@@ -69,7 +93,6 @@ export default function App() {
       const response = await createResearchRun(formData);
       const researchId = response.research_id;
 
-      // Set initial run state
       setCurrentRun({
         id: researchId,
         question: formData.question,
@@ -86,12 +109,10 @@ export default function App() {
         (sseEvent) => {
           const { type, data } = sseEvent;
           
-          // Update event list
           if (data.message) {
             setEvents((prev) => [...prev, data]);
           }
 
-          // Update current run state based on event
           if (data.status) {
             setCurrentRun((prev) => ({
               ...prev,
@@ -102,7 +123,6 @@ export default function App() {
             }));
           }
 
-          // Re-fetch detailed task list when plan is created or research completes
           if (type === 'plan_created' || type === 'done' || type === 'research_completed') {
             fetchResearchRun(researchId)
               .then((updated) => {
@@ -131,7 +151,7 @@ export default function App() {
   const rightTabs = [
     { id: 'events', label: 'Live Events' },
     { id: 'plan', label: 'Research Plan' },
-    { id: 'evidence', label: 'Evidence & Ledger' },
+    { id: 'evidence', label: 'Evidence & Exports' },
   ];
 
   return (
@@ -141,7 +161,10 @@ export default function App() {
       systemHealth={systemHealth}
       researchHistory={researchHistory}
       onSelectRun={handleSelectRun}
+      onDeleteRun={handleDeleteRun}
       currentRunId={currentRun?.id}
+      theme={theme}
+      setTheme={setTheme}
       rightPanel={
         <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
           <Tabs tabs={rightTabs} activeTab={rightTab} onChange={setRightTab} />
@@ -165,6 +188,7 @@ export default function App() {
         <History
           researchHistory={researchHistory}
           onSelectRun={handleSelectRun}
+          onDeleteRun={handleDeleteRun}
         />
       )}
     </ResearchLayout>

@@ -8,7 +8,10 @@ export default function ResearchLayout({
   systemHealth,
   researchHistory,
   onSelectRun,
+  onDeleteRun,
   currentRunId,
+  theme,
+  setTheme,
   children,
   rightPanel
 }) {
@@ -19,7 +22,10 @@ export default function ResearchLayout({
         setActiveTab={setActiveTab}
         researchHistory={researchHistory}
         onSelectRun={onSelectRun}
+        onDeleteRun={onDeleteRun}
         currentRunId={currentRunId}
+        theme={theme}
+        setTheme={setTheme}
       />
 
       <div className="main-workspace">
