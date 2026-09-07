@@ -1,4 +1,4 @@
-# ResearchOS 🔬
+# ResearchOS
 
 **ResearchOS** is a production-grade, provider-agnostic Deep Research Engine and research workstation designed for academic, technical, market, competitive, and scientific investigations.
 
@@ -6,7 +6,7 @@ Unlike standard conversational chatbots or basic naive RAG demos, ResearchOS con
 
 ---
 
-## 🏛️ System Architecture
+## System Architecture
 
 ```
 User Question
@@ -38,7 +38,7 @@ User Question
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Prerequisites
 - **Python 3.11+**
@@ -49,7 +49,7 @@ User Question
 ```bash
 cp .env.example .env
 ```
-Edit `.env` to configure your API keys (e.g. `GEMINI_API_KEY`, `GROQ_API_KEY`, `OPENROUTER_API_KEY`) and database parameters.
+Edit `.env` to configure your API keys (e.g. `OPENROUTER_API_KEY`, `GROQ_API_KEY`, `GEMINI_API_KEY`, `HUGGINGFACE_API_KEY`) and database parameters.
 
 ### 2. Run with Docker Compose (Recommended)
 ```bash
@@ -82,7 +82,7 @@ npm run dev
 
 ---
 
-## 📚 Documentation (`docs/`)
+## Documentation (`docs/`)
 All detailed specifications and developer guides are located in the [**`docs/`**](docs/README.md) directory:
 - [System Architecture](docs/ARCHITECTURE.md)
 - [Development Guide](docs/DEVELOPMENT.md)
@@ -93,5 +93,5 @@ All detailed specifications and developer guides are located in the [**`docs/`**
 
 ---
 
-## 🛡️ License
+## License
 Apache-2.0 License.
