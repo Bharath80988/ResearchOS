@@ -2,10 +2,7 @@ import React, { useState, useEffect } from 'react';
 import ResearchLayout from './components/layout/ResearchLayout';
 import Workspace from './pages/Workspace';
 import History from './pages/History';
-import Tabs from './components/common/Tabs';
-import EventStream from './components/research/EventStream';
-import PlanViewer from './components/research/PlanViewer';
-import EvidenceViewer from './components/research/EvidenceViewer';
+import FloatingProgressBar from './components/research/FloatingProgressBar';
 import {
   checkHealth,
   createResearchRun,
@@ -18,7 +15,6 @@ import {
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('workspace');
-  const [rightTab, setRightTab] = useState('events');
   const [theme, setTheme] = useState('default');
   const [systemHealth, setSystemHealth] = useState(null);
   const [researchHistory, setResearchHistory] = useState([]);
@@ -27,12 +23,10 @@ export default function App() {
   const [tasks, setTasks] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Apply theme to body
   useEffect(() => {
     document.body.setAttribute('data-theme', theme);
   }, [theme]);
 
-  // Initial load
   useEffect(() => {
     checkHealth()
       .then(setSystemHealth)
@@ -99,11 +93,10 @@ export default function App() {
         intent: formData.intent,
         depth: formData.depth,
         status: 'queued',
-        current_stage: 'Research queued',
+        current_stage: formData.files?.length ? `Parsing ${formData.files.length} attached documents...` : 'Research queued',
         progress_percentage: 0,
       });
 
-      // Subscribe to live SSE event stream
       const unsubscribe = subscribeToResearchEvents(
         researchId,
         (sseEvent) => {
@@ -148,12 +141,6 @@ export default function App() {
     }
   };
 
-  const rightTabs = [
-    { id: 'events', label: 'Live Events' },
-    { id: 'plan', label: 'Research Plan' },
-    { id: 'evidence', label: 'Evidence & Exports' },
-  ];
-
   return (
     <ResearchLayout
       activeTab={activeTab}
@@ -165,15 +152,14 @@ export default function App() {
       currentRunId={currentRun?.id}
       theme={theme}
       setTheme={setTheme}
-      rightPanel={
-        <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-          <Tabs tabs={rightTabs} activeTab={rightTab} onChange={setRightTab} />
-          <div style={{ flex: 1, overflow: 'hidden' }}>
-            {rightTab === 'events' && <EventStream events={events} />}
-            {rightTab === 'plan' && <PlanViewer tasks={tasks} />}
-            {rightTab === 'evidence' && <EvidenceViewer summary={currentRun?.summary} currentRun={currentRun} />}
-          </div>
-        </div>
+      floatingProgress={
+        currentRun && (
+          <FloatingProgressBar
+            currentRun={currentRun}
+            events={events}
+            tasks={tasks}
+          />
+        )
       }
     >
       {activeTab === 'workspace' && (

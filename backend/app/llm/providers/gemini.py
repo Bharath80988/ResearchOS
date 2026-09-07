@@ -11,6 +11,7 @@ class GeminiProvider(BaseLLMProvider):
     Google Gemini API Provider (Free Tier):
     - gemini-2.5-flash
     - gemini-2.5-pro
+    - gemini-1.5-flash
     """
 
     BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
@@ -18,22 +19,28 @@ class GeminiProvider(BaseLLMProvider):
     def __init__(self, api_key: Optional[str] = None, default_model: str = "gemini-2.5-flash"):
         super().__init__(api_key=api_key, default_model=default_model)
 
+    def _get_target_model(self, model: Optional[str]) -> str:
+        # Guarantee we only use valid Gemini model names on this endpoint
+        if model and "gemini" in model.lower():
+            return model
+        return self.default_model or "gemini-2.5-flash"
+
     def generate(
         self,
         prompt: str,
         system_prompt: Optional[str] = None,
         model: Optional[str] = None,
         temperature: float = 0.3,
-        max_tokens: int = 2048,
+        max_tokens: int = 4096,
     ) -> LLMResponse:
         start_time = time.time()
-        target_model = model or self.default_model
+        target_model = self._get_target_model(model)
         url = f"{self.BASE_URL}/{target_model}:generateContent?key={self.api_key or ''}"
 
         contents = []
         if system_prompt:
             contents.append({"role": "user", "parts": [{"text": f"SYSTEM INSTRUCTION: {system_prompt}"}]})
-            contents.append({"role": "model", "parts": [{"text": "Understood. I will follow instructions."}]})
+            contents.append({"role": "model", "parts": [{"text": "Understood. I will follow instructions strictly."}]})
 
         contents.append({"role": "user", "parts": [{"text": prompt}]})
 
@@ -46,7 +53,7 @@ class GeminiProvider(BaseLLMProvider):
         }
 
         try:
-            with httpx.Client(timeout=45.0) as client:
+            with httpx.Client(timeout=60.0) as client:
                 res = client.post(url, json=payload)
                 res.raise_for_status()
                 data = res.json()
@@ -81,7 +88,7 @@ class GeminiProvider(BaseLLMProvider):
         system_prompt: Optional[str] = None,
         model: Optional[str] = None,
         temperature: float = 0.1,
-        max_tokens: int = 2048,
+        max_tokens: int = 4096,
     ) -> LLMResponse:
         sys = (system_prompt or "") + "\nRespond with valid, raw JSON only. Do not enclose in markdown blocks."
         resp = self.generate(prompt=prompt, system_prompt=sys, model=model, temperature=temperature, max_tokens=max_tokens)
@@ -109,7 +116,7 @@ class GeminiProvider(BaseLLMProvider):
         system_prompt: Optional[str] = None,
         model: Optional[str] = None,
         temperature: float = 0.3,
-        max_tokens: int = 2048,
+        max_tokens: int = 4096,
     ) -> Generator[str, None, None]:
         resp = self.generate(prompt=prompt, system_prompt=system_prompt, model=model, temperature=temperature, max_tokens=max_tokens)
         words = resp.content.split(" ")

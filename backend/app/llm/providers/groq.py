@@ -9,8 +9,8 @@ from ...utils import logger
 class GroqProvider(BaseLLMProvider):
     """
     Groq API Provider (Free Tier):
+    - llama-3.1-8b-instant (Fast extraction @ 300+ t/s)
     - llama-3.3-70b-versatile
-    - llama-3.1-8b-instant (Ideal for 300+ tokens/sec parallel worker extraction)
     """
 
     BASE_URL = "https://api.groq.com/openai/v1/chat/completions"
@@ -24,16 +24,23 @@ class GroqProvider(BaseLLMProvider):
             "Content-Type": "application/json",
         }
 
+    def _get_target_model(self, model: Optional[str]) -> str:
+        if model and ("llama" in model.lower() or "mixtral" in model.lower() or "gemma" in model.lower()):
+            if "/" in model:
+                model = model.split("/")[-1].replace(":free", "")
+            return model
+        return self.default_model or "llama-3.1-8b-instant"
+
     def generate(
         self,
         prompt: str,
         system_prompt: Optional[str] = None,
         model: Optional[str] = None,
         temperature: float = 0.2,
-        max_tokens: int = 2048,
+        max_tokens: int = 4096,
     ) -> LLMResponse:
         start_time = time.time()
-        target_model = model or self.default_model
+        target_model = self._get_target_model(model)
 
         messages = []
         if system_prompt:
@@ -48,7 +55,7 @@ class GroqProvider(BaseLLMProvider):
         }
 
         try:
-            with httpx.Client(timeout=30.0) as client:
+            with httpx.Client(timeout=45.0) as client:
                 res = client.post(self.BASE_URL, headers=self._get_headers(), json=payload)
                 res.raise_for_status()
                 data = res.json()
@@ -77,7 +84,7 @@ class GroqProvider(BaseLLMProvider):
         system_prompt: Optional[str] = None,
         model: Optional[str] = None,
         temperature: float = 0.1,
-        max_tokens: int = 2048,
+        max_tokens: int = 4096,
     ) -> LLMResponse:
         sys = (system_prompt or "") + "\nYou MUST output valid raw JSON only. Do not enclose in markdown blocks."
         resp = self.generate(prompt=prompt, system_prompt=sys, model=model, temperature=temperature, max_tokens=max_tokens)
@@ -105,9 +112,9 @@ class GroqProvider(BaseLLMProvider):
         system_prompt: Optional[str] = None,
         model: Optional[str] = None,
         temperature: float = 0.2,
-        max_tokens: int = 2048,
+        max_tokens: int = 4096,
     ) -> Generator[str, None, None]:
-        target_model = model or self.default_model
+        target_model = self._get_target_model(model)
         messages = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
@@ -121,7 +128,7 @@ class GroqProvider(BaseLLMProvider):
             "stream": True,
         }
 
-        with httpx.Client(timeout=30.0) as client:
+        with httpx.Client(timeout=45.0) as client:
             with client.stream("POST", self.BASE_URL, headers=self._get_headers(), json=payload) as response:
                 for line in response.iter_lines():
                     if line.startswith("data: "):

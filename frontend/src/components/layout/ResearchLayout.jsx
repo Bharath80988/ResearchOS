@@ -13,7 +13,7 @@ export default function ResearchLayout({
   theme,
   setTheme,
   children,
-  rightPanel
+  floatingProgress
 }) {
   return (
     <div className="app-container">
@@ -30,14 +30,10 @@ export default function ResearchLayout({
 
       <div className="main-workspace">
         <Header systemHealth={systemHealth} />
-        <div className="content-pane">
-          <main className="center-pane">
-            {children}
-          </main>
-          <aside className="right-pane">
-            {rightPanel}
-          </aside>
-        </div>
+        <main style={{ flex: 1, overflowY: 'auto', padding: '24px 40px 100px 40px', maxWidth: '1100px', width: '100%', margin: '0 auto' }}>
+          {children}
+        </main>
+        {floatingProgress}
       </div>
     </div>
   );

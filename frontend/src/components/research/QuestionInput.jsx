@@ -1,11 +1,9 @@
 import React, { useState, useRef } from 'react';
-import { Send, BookOpen, Layers, Globe, Github, Cpu, Zap, Search, Microscope, Upload, FileText, X, Paperclip } from 'lucide-react';
+import { Send, Zap, Microscope, Paperclip, X, FileText, CheckCircle2 } from 'lucide-react';
 
 export default function QuestionInput({ onSubmit, isLoading }) {
   const [question, setQuestion] = useState('');
-  const [intent, setIntent] = useState('academic_research');
   const [depth, setDepth] = useState('deep');
-  const [provider, setProvider] = useState('gemini');
   const [uploadedFiles, setUploadedFiles] = useState([]);
   const fileInputRef = useRef(null);
 
@@ -16,12 +14,12 @@ export default function QuestionInput({ onSubmit, isLoading }) {
     const parsedList = [];
     for (const file of files) {
       try {
-        const text = await readFileAsText(file);
+        const base64Data = await readFileAsBase64(file);
         parsedList.push({
           name: file.name,
-          content: text,
+          content: base64Data,
           size: file.size,
-          type: file.type || 'text/plain'
+          type: file.type || 'application/pdf'
         });
       } catch (err) {
         console.error(`Could not read ${file.name}:`, err);
@@ -30,12 +28,12 @@ export default function QuestionInput({ onSubmit, isLoading }) {
     setUploadedFiles((prev) => [...prev, ...parsedList]);
   };
 
-  const readFileAsText = (file) => {
+  const readFileAsBase64 = (file) => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => resolve(reader.result);
       reader.onerror = reject;
-      reader.readAsText(file);
+      reader.readAsDataURL(file); // Encode as Base64 Data URL for lossless PDF / binary parsing
     });
   };
 
@@ -48,33 +46,22 @@ export default function QuestionInput({ onSubmit, isLoading }) {
     if (!question.trim() || isLoading) return;
     onSubmit({
       question: question.trim(),
-      intent,
+      intent: uploadedFiles.length > 0 ? 'document_analysis' : 'academic_research',
       depth,
       files: uploadedFiles,
       options: {
-        provider,
+        provider: 'gemini',
       },
     });
   };
 
-  const depthModes = [
-    { id: 'quick', label: 'Instant Answer', desc: 'Instant direct answer with key references', icon: Zap },
-    { id: 'standard', label: 'Mid (Analysis & Debugging)', desc: 'Comparative study, benchmarks & trade-offs', icon: Search },
-    { id: 'deep', label: 'Deep Research (Multi-AI)', desc: 'Multi-AI workers, 30+ sources, chapters & code', icon: Microscope },
-  ];
-
-  const orchestratorTeams = [
-    { id: 'gemini', label: 'Gemini Head + Groq & DeepSeek Workers', desc: 'Gemini plans, Groq & DeepSeek extract concurrently' },
-    { id: 'openrouter', label: 'DeepSeek-R1 Head + Multi-Workers', desc: 'DeepSeek R1 reasoning + fast worker pool' },
-    { id: 'groq', label: 'Groq High-Speed Team', desc: '300+ tokens/sec fast response' },
-  ];
-
   return (
     <div className="glass-card prompt-composer">
-      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        {/* Textarea */}
         <textarea
           className="prompt-textarea"
-          placeholder="Ask a deep research question or request code implementation (e.g. 'Can multimodal RAG improve clinical diagnosis workflows? Provide introduction, chapters, working code, and export to PPT')..."
+          placeholder="Ask a deep research inquiry, attach marksheets, or request custom code (e.g. 'Analyse these files and calculate my Anna University CGPA, subject strengths, and percentage conversion')..."
           value={question}
           onChange={(e) => setQuestion(e.target.value)}
           rows={3}
@@ -85,7 +72,7 @@ export default function QuestionInput({ onSubmit, isLoading }) {
         {uploadedFiles.length > 0 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '11px', color: 'var(--text-dim)', fontWeight: '700' }}>
-              <span>SUPPORTING DOCUMENTS ({uploadedFiles.length} files attached - AI will shard & process)</span>
+              <span>{uploadedFiles.length} ATTACHED DOCUMENTS (AI WILL SHARD & ANALYZE)</span>
               <button
                 type="button"
                 onClick={() => setUploadedFiles([])}
@@ -108,84 +95,62 @@ export default function QuestionInput({ onSubmit, isLoading }) {
           </div>
         )}
 
-        <div className="composer-toolbar">
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', width: '100%' }}>
-            {/* Research Depth Selection */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-              <span style={{ fontSize: '11px', color: 'var(--text-dim)', fontWeight: '700', textTransform: 'uppercase' }}>
-                DEPTH MODE:
-              </span>
-              {depthModes.map((dm) => {
-                const Icon = dm.icon;
-                return (
-                  <button
-                    key={dm.id}
-                    type="button"
-                    className={`chip ${depth === dm.id ? 'active' : ''}`}
-                    onClick={() => setDepth(dm.id)}
-                    disabled={isLoading}
-                    title={dm.desc}
-                  >
-                    <Icon size={13} color={depth === dm.id ? 'var(--accent-primary)' : 'var(--text-dim)'} />
-                    <span>{dm.label}</span>
-                  </button>
-                );
-              })}
-            </div>
+        {/* Action Bar */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
+          {/* Depth Modes */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <button
+              type="button"
+              className={`chip ${depth === 'quick' ? 'active' : ''}`}
+              onClick={() => setDepth('quick')}
+              disabled={isLoading}
+              title="Fast direct answer with key references"
+            >
+              <Zap size={13} color={depth === 'quick' ? 'var(--accent-primary)' : 'var(--text-dim)'} />
+              <span>Instant Answer</span>
+            </button>
 
-            {/* AI Team & File Upload Button */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-                <div className="chips-group">
-                  <span style={{ fontSize: '11px', color: 'var(--text-dim)', fontWeight: '700', textTransform: 'uppercase' }}>
-                    AI TEAM:
-                  </span>
-                  {orchestratorTeams.map((t) => (
-                    <button
-                      key={t.id}
-                      type="button"
-                      className={`chip ${provider === t.id ? 'active' : ''}`}
-                      onClick={() => setProvider(t.id)}
-                      disabled={isLoading}
-                      title={t.desc}
-                    >
-                      <Cpu size={12} />
-                      <span>{t.label}</span>
-                    </button>
-                  ))}
-                </div>
+            <button
+              type="button"
+              className={`chip ${depth === 'deep' ? 'active' : ''}`}
+              onClick={() => setDepth('deep')}
+              disabled={isLoading}
+              title="Full multi-AI parallel research with chapters, code & citations"
+            >
+              <Microscope size={13} color={depth === 'deep' ? 'var(--accent-primary)' : 'var(--text-dim)'} />
+              <span>Deep Research (Multi-AI)</span>
+            </button>
+          </div>
 
-                {/* File Upload Trigger */}
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  onChange={handleFileChange}
-                  multiple
-                  style={{ display: 'none' }}
-                />
-                <button
-                  type="button"
-                  className="chip"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={isLoading}
-                  style={{ background: 'rgba(255, 255, 255, 0.05)', color: '#fff' }}
-                  title="Attach up to 100+ PDFs, TXT, Code, or CSV files"
-                >
-                  <Paperclip size={13} color="var(--accent-secondary)" />
-                  <span>Attach Files ({uploadedFiles.length})</span>
-                </button>
-              </div>
+          {/* Attach & Submit */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileChange}
+              multiple
+              style={{ display: 'none' }}
+            />
+            <button
+              type="button"
+              className="chip"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isLoading}
+              style={{ background: 'rgba(255, 255, 255, 0.05)', color: '#fff' }}
+              title="Attach up to 100+ PDFs, Transcripts, TXT, or Code files"
+            >
+              <Paperclip size={13} color="var(--accent-secondary)" />
+              <span>Attach Docs ({uploadedFiles.length})</span>
+            </button>
 
-              <button
-                type="submit"
-                className="btn-primary"
-                disabled={!question.trim() || isLoading}
-                style={{ padding: '10px 26px', fontSize: '14px' }}
-              >
-                <Send size={15} />
-                <span>{isLoading ? 'Researching...' : 'Start Research'}</span>
-              </button>
-            </div>
+            <button
+              type="submit"
+              className="btn-primary"
+              disabled={!question.trim() || isLoading}
+            >
+              <Send size={14} />
+              <span>{isLoading ? 'Researching...' : 'Submit'}</span>
+            </button>
           </div>
         </div>
       </form>
