@@ -161,11 +161,20 @@ class ResearchOrchestrator:
                         raw_content=extracted_text
                     ))
 
-            # Query web/academic sources if needed
-            web_sources = self.search_tool.search(query=question, max_results=search_limit)
-            all_candidate_sources.extend(web_sources)
+            # Query open scholarly indexes with cleaned academic queries
+            from ..tools.query_extractor import QueryExtractor
+            search_queries = QueryExtractor.generate_search_queries(question)
+            
+            seen_urls = set(s.url for s in all_candidate_sources)
+            for sq in search_queries:
+                batch_limit = max(search_limit // len(search_queries), 5)
+                found_sources = self.search_tool.search(query=sq, max_results=batch_limit)
+                for s in found_sources:
+                    if s.url not in seen_urls:
+                        seen_urls.add(s.url)
+                        all_candidate_sources.append(s)
 
-            self._emit_event("search_completed", "searching", f"Corpus compiled with {len(all_candidate_sources)} total sources ({len(uploaded_files or [])} uploaded docs parsed).", {"sources_found": len(all_candidate_sources)})
+            self._emit_event("search_completed", "searching", f"Corpus compiled with {len(all_candidate_sources)} total scholarly sources across {len(search_queries)} query angles.", {"sources_found": len(all_candidate_sources)})
 
             # Store discovered sources in DB
             saved_sources_meta = []
