@@ -1,10 +1,11 @@
 import React, { useState, useRef } from 'react';
-import { Send, Zap, Microscope, Paperclip, X, FileText, CheckCircle2 } from 'lucide-react';
+import { Send, Zap, Microscope, Paperclip, X, FileText, Cpu, Trash2 } from 'lucide-react';
 
 export default function QuestionInput({ onSubmit, isLoading }) {
   const [question, setQuestion] = useState('');
   const [depth, setDepth] = useState('deep');
   const [uploadedFiles, setUploadedFiles] = useState([]);
+  const [provider, setProvider] = useState('multi-ai');
   const fileInputRef = useRef(null);
 
   const handleFileChange = async (e) => {
@@ -33,7 +34,7 @@ export default function QuestionInput({ onSubmit, isLoading }) {
       const reader = new FileReader();
       reader.onload = () => resolve(reader.result);
       reader.onerror = reject;
-      reader.readAsDataURL(file); // Encode as Base64 Data URL for lossless PDF / binary parsing
+      reader.readAsDataURL(file);
     });
   };
 
@@ -50,18 +51,18 @@ export default function QuestionInput({ onSubmit, isLoading }) {
       depth,
       files: uploadedFiles,
       options: {
-        provider: 'gemini',
+        provider,
       },
     });
   };
 
   return (
     <div className="glass-card prompt-composer">
-      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
         {/* Textarea */}
         <textarea
           className="prompt-textarea"
-          placeholder="Ask a deep research inquiry, attach marksheets, or request custom code (e.g. 'Analyse these files and calculate my Anna University CGPA, subject strengths, and percentage conversion')..."
+          placeholder="Ask a deep research inquiry, attach academic marksheets (e.g. sem1.pdf ... sem8.pdf), or query scientific literature (e.g. 'Analyse these files and get Anna University CGPA conversion, subject strengths, and marks summary')..."
           value={question}
           onChange={(e) => setQuestion(e.target.value)}
           rows={3}
@@ -70,35 +71,35 @@ export default function QuestionInput({ onSubmit, isLoading }) {
 
         {/* Attached Files Strip */}
         {uploadedFiles.length > 0 && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '11px', color: 'var(--text-dim)', fontWeight: '700' }}>
-              <span>{uploadedFiles.length} ATTACHED DOCUMENTS (AI WILL SHARD & ANALYZE)</span>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', background: '#050508', padding: '10px 14px', borderRadius: 'var(--radius-md)', border: '1px solid rgba(255,255,255,0.1)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '11.5px', color: '#94a3b8', fontWeight: '700' }}>
+              <span>{uploadedFiles.length} ATTACHED DOCUMENTS (PARALLEL MULTI-AI SHARDING)</span>
               <button
                 type="button"
                 onClick={() => setUploadedFiles([])}
-                style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '11px' }}
+                style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '11.5px', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: '600' }}
               >
-                Clear all
+                <Trash2 size={12} /> Clear all
               </button>
             </div>
             <div className="files-preview-list">
               {uploadedFiles.map((file, idx) => (
                 <div key={idx} className="file-chip">
-                  <FileText size={12} color="var(--accent-secondary)" />
-                  <span style={{ maxWidth: '160px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <FileText size={13} color="var(--accent-secondary)" />
+                  <span style={{ maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {file.name}
                   </span>
-                  <X size={12} style={{ cursor: 'pointer' }} onClick={() => removeFile(idx)} />
+                  <X size={13} style={{ cursor: 'pointer', color: '#94a3b8' }} onClick={() => removeFile(idx)} />
                 </div>
               ))}
             </div>
           </div>
         )}
 
-        {/* Action Bar */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
-          {/* Depth Modes */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+        {/* Controls & Action Bar */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
+          {/* Depth Modes & Provider Selector */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
             <button
               type="button"
               className={`chip ${depth === 'quick' ? 'active' : ''}`}
@@ -106,7 +107,7 @@ export default function QuestionInput({ onSubmit, isLoading }) {
               disabled={isLoading}
               title="Fast direct answer with key references"
             >
-              <Zap size={13} color={depth === 'quick' ? 'var(--accent-primary)' : 'var(--text-dim)'} />
+              <Zap size={14} color={depth === 'quick' ? '#ffffff' : '#94a3b8'} />
               <span>Instant Answer</span>
             </button>
 
@@ -115,9 +116,9 @@ export default function QuestionInput({ onSubmit, isLoading }) {
               className={`chip ${depth === 'deep' ? 'active' : ''}`}
               onClick={() => setDepth('deep')}
               disabled={isLoading}
-              title="Full multi-AI parallel research with chapters, code & citations"
+              title="Full multi-AI parallel research with chapters, calculations & code"
             >
-              <Microscope size={13} color={depth === 'deep' ? 'var(--accent-primary)' : 'var(--text-dim)'} />
+              <Microscope size={14} color={depth === 'deep' ? '#ffffff' : '#94a3b8'} />
               <span>Deep Research (Multi-AI)</span>
             </button>
           </div>
@@ -136,11 +137,11 @@ export default function QuestionInput({ onSubmit, isLoading }) {
               className="chip"
               onClick={() => fileInputRef.current?.click()}
               disabled={isLoading}
-              style={{ background: 'rgba(255, 255, 255, 0.05)', color: '#fff' }}
-              title="Attach up to 100+ PDFs, Transcripts, TXT, or Code files"
+              style={{ background: '#14141e', color: '#ffffff', border: '1px solid rgba(255, 255, 255, 0.18)' }}
+              title="Attach up to 100+ PDFs, Marksheets, TXT, or Code files"
             >
-              <Paperclip size={13} color="var(--accent-secondary)" />
-              <span>Attach Docs ({uploadedFiles.length})</span>
+              <Paperclip size={14} color="var(--accent-secondary)" />
+              <span>Attach Docs {uploadedFiles.length > 0 ? `(${uploadedFiles.length})` : ''}</span>
             </button>
 
             <button
@@ -148,8 +149,8 @@ export default function QuestionInput({ onSubmit, isLoading }) {
               className="btn-primary"
               disabled={!question.trim() || isLoading}
             >
-              <Send size={14} />
-              <span>{isLoading ? 'Researching...' : 'Submit'}</span>
+              <Send size={15} />
+              <span>{isLoading ? 'Synthesizing...' : 'Submit Inquiry'}</span>
             </button>
           </div>
         </div>

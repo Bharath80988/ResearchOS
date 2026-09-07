@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Compass, BookOpen, Clock, Plus, Trash2, Search, Palette } from 'lucide-react';
+import { Compass, BookOpen, Plus, Trash2, Search, Palette } from 'lucide-react';
 
 export default function Sidebar({
   activeTab,
@@ -22,13 +22,14 @@ export default function Sidebar({
       <div className="sidebar-header">
         <div className="logo-badge">R</div>
         <div>
-          <h1 style={{ fontSize: '15px', fontWeight: '800', letterSpacing: '-0.02em' }}>ResearchOS</h1>
-          <p style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Multi-AI Workstation</p>
+          <h1 style={{ fontSize: '15px', fontWeight: '800', letterSpacing: '-0.02em', color: '#ffffff' }}>ResearchOS</h1>
+          <p style={{ fontSize: '11px', color: '#94a3b8' }}>Autonomous Multi-AI</p>
         </div>
       </div>
 
       {/* New Research Button */}
       <button
+        type="button"
         className="new-chat-btn"
         onClick={() => {
           setActiveTab('workspace');
@@ -41,14 +42,19 @@ export default function Sidebar({
 
       <div className="sidebar-nav">
         <button
+          type="button"
           className={`nav-item ${activeTab === 'workspace' && !currentRunId ? 'active' : ''}`}
-          onClick={() => setActiveTab('workspace')}
+          onClick={() => {
+            setActiveTab('workspace');
+            onSelectRun(null);
+          }}
         >
           <Compass size={16} />
           <span>Research Canvas</span>
         </button>
 
         <button
+          type="button"
           className={`nav-item ${activeTab === 'history' ? 'active' : ''}`}
           onClick={() => setActiveTab('history')}
         >
@@ -57,9 +63,9 @@ export default function Sidebar({
         </button>
 
         {/* History Section Header with Search */}
-        <div style={{ marginTop: '16px', marginBottom: '8px' }}>
+        <div style={{ marginTop: '20px', marginBottom: '8px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-            <span style={{ fontSize: '11px', fontWeight: '800', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            <span style={{ fontSize: '11px', fontWeight: '800', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
               Past Inquiries ({researchHistory.length})
             </span>
           </div>
@@ -68,12 +74,12 @@ export default function Sidebar({
             display: 'flex',
             alignItems: 'center',
             gap: '6px',
-            background: 'rgba(255, 255, 255, 0.03)',
-            border: '1px solid var(--border-subtle)',
+            background: '#0d0d12',
+            border: '1px solid rgba(255, 255, 255, 0.12)',
             borderRadius: 'var(--radius-md)',
-            padding: '4px 8px'
+            padding: '6px 10px'
           }}>
-            <Search size={12} color="var(--text-dim)" />
+            <Search size={13} color="#94a3b8" />
             <input
               type="text"
               placeholder="Filter inquiries..."
@@ -83,7 +89,7 @@ export default function Sidebar({
                 background: 'transparent',
                 border: 'none',
                 outline: 'none',
-                color: '#fff',
+                color: '#ffffff',
                 fontSize: '12px',
                 width: '100%'
               }}
@@ -93,11 +99,11 @@ export default function Sidebar({
 
         {/* History List */}
         {filteredHistory.length === 0 ? (
-          <div style={{ padding: '12px', fontSize: '12px', color: 'var(--text-dim)', textAlign: 'center' }}>
-            {searchTerm ? 'No matching inquiries' : 'No past research'}
+          <div style={{ padding: '16px 8px', fontSize: '12px', color: '#64748b', textAlign: 'center' }}>
+            {searchTerm ? 'No matching inquiries' : 'No past research yet'}
           </div>
         ) : (
-          filteredHistory.slice(0, 15).map((run) => (
+          filteredHistory.slice(0, 20).map((run) => (
             <div
               key={run.id}
               className={`history-item ${currentRunId === run.id ? 'active' : ''}`}
@@ -109,6 +115,7 @@ export default function Sidebar({
 
               {onDeleteRun && (
                 <button
+                  type="button"
                   onClick={(e) => {
                     e.stopPropagation();
                     if (confirm('Delete this research run?')) onDeleteRun(run.id);
@@ -116,7 +123,7 @@ export default function Sidebar({
                   style={{
                     background: 'transparent',
                     border: 'none',
-                    color: 'var(--text-dim)',
+                    color: '#64748b',
                     cursor: 'pointer',
                     padding: '2px',
                     display: 'flex',
@@ -139,50 +146,54 @@ export default function Sidebar({
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        fontSize: '11px',
-        color: 'var(--text-dim)'
+        fontSize: '11.5px',
+        color: '#94a3b8',
+        background: '#040406'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <Palette size={13} color="var(--accent-primary)" />
-          <span>Theme</span>
+          <Palette size={14} color="var(--accent-primary)" />
+          <span>OLED Theme</span>
         </div>
 
-        <div style={{ display: 'flex', gap: '4px' }}>
+        <div style={{ display: 'flex', gap: '6px' }}>
           <button
+            type="button"
             onClick={() => setTheme('default')}
             style={{
               width: '18px',
               height: '18px',
               borderRadius: '50%',
               background: '#6366f1',
-              border: theme === 'default' ? '2px solid #fff' : 'none',
+              border: theme === 'default' ? '2px solid #ffffff' : '1px solid transparent',
               cursor: 'pointer'
             }}
-            title="Obsidian Midnight"
+            title="Pitch Black & Indigo"
           />
           <button
+            type="button"
             onClick={() => setTheme('aurora')}
             style={{
               width: '18px',
               height: '18px',
               borderRadius: '50%',
               background: '#ec4899',
-              border: theme === 'aurora' ? '2px solid #fff' : 'none',
+              border: theme === 'aurora' ? '2px solid #ffffff' : '1px solid transparent',
               cursor: 'pointer'
             }}
-            title="Nebula Aurora"
+            title="Nebula Pink & Purple"
           />
           <button
+            type="button"
             onClick={() => setTheme('cyber')}
             style={{
               width: '18px',
               height: '18px',
               borderRadius: '50%',
               background: '#06b6d4',
-              border: theme === 'cyber' ? '2px solid #fff' : 'none',
+              border: theme === 'cyber' ? '2px solid #ffffff' : '1px solid transparent',
               cursor: 'pointer'
             }}
-            title="Cyber Slate"
+            title="Cyber Cyan & Emerald"
           />
         </div>
       </div>
